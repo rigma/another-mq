@@ -1,0 +1,10 @@
+[package]
+name = "another-mq"
+version = "0.1.0"
+authors = ["rigma <rigbuntu@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+serde = { version = "1.0.114", features = ["derive"] }
+toml = "0.5.6"
