@@ -6,5 +6,8 @@ edition = "2018"
 publish = false
 
 [dependencies]
+env_logger = "0.7.1"
+log = { version = "0.4.8", features = ["serde"] }
+syslog = "5.0.0"
 serde = { version = "1.0.114", features = ["derive"] }
 toml = "0.5.6"
