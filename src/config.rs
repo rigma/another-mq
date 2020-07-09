@@ -5,8 +5,10 @@ use serde::{
 };
 use std::{
     convert::Into,
-    fmt,
+    env, fmt, fs,
     net::{IpAddr, Ipv4Addr},
+    path::Path,
+    process::Command,
 };
 
 /// The default value of the listener's hostname.
@@ -15,9 +17,24 @@ const DEFAULT_LISTENER_HOSTNAME: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 /// The default value of the listener's port.
 const DEFAULT_LISTENER_PORT: u16 = 5672;
 
-/// This data structure is holding the configuration defined by the user of
-/// `another-mq`. This configuration is loaded from a TOML file which can be
-/// edited by the user to fit its needs.
+/// This data structure is holding the configuration defined by the user of `another-mq`. This 
+/// configuration is loaded from a TOML file which can be edited by the user to fit its needs.
+///
+/// # Location of configuration file
+///
+/// The configuration file of `another-mq` is called `another-mq.toml`, and it's stored in different
+/// locations depending on the OS you're using.
+///
+/// | Platform   | Default configuration file path                   |
+/// | ---------- | ------------------------------------------------- |
+/// | Windows    | `%APPDATA\another-mq\another-mq.toml`             |
+/// | MacOS      | `$(brew --prefix)/etc/another-mq/another-mq.toml` |
+/// | Linux/Unix | `$ANOTHERMQ_HOME/etc/another-mq/another-mq.toml`  |
+///
+/// > By default, the `$ANOTHERMQ_HOME` variable is empty.
+/// >
+/// > For MacOS platform, if `brew` is not installed, the default configuration file path will be the same as
+/// > as for Linux/Unix.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     /// The log namespace.
@@ -28,6 +45,95 @@ pub struct Config {
 
     /// The queue namespace.
     pub queue: Queue,
+}
+
+impl Config {
+    /// Loads the configuration from an arbitrary TOML file specified by the user.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
+        let raw = match fs::read_to_string(path) {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Self::default();
+            }
+        };
+
+        match toml::from_str(&raw) {
+            Ok(config) => config,
+            Err(_) => Self::default(),
+        }
+    }
+
+    /// Loads the configuration from the default TOML configuration file.
+    ///
+    /// If the configuration could not be loaded by the application, a default instance of the
+    /// `Config` structure will be returned instead.
+    #[cfg(target_os = "windows")]
+    pub fn from_config_file() -> Self {
+        let config_path = env::var("APPDATA")
+            .expect("%APPDATA% environment variable is not defined on your system!");
+        let config_path = config_path + "/another-mq/another-mq.toml";
+
+        let raw = match fs::read_to_string(config_path) {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Self::default();
+            }
+        };
+
+        match toml::from_str(&raw) {
+            Ok(config) => config,
+            Err(_) => Self::default(),
+        }
+    }
+
+    /// Loads the configuration from the default TOML configuration file.
+    ///
+    /// If the configuration could not be loaded by the application, a default instance of the
+    /// `Config` structure will be returned instead.
+    #[cfg(target_os = "macos")]
+    pub fn from_config_file() -> Self {
+        let install_prefix = Command::new("brew").arg("--prefix").output();
+        let install_prefix = match install_prefix {
+            Ok(output) => String::from_utf8(output.stdout).unwrap(),
+            Err(_) => env::var("ANOTHERMQ_HOME").unwrap_or_else(|_| "".into()),
+        };
+
+        let config_path = install_prefix + "/etc/another-mq/another-mq.toml";
+
+        let raw = match fs::read_to_string(config_path) {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Self::default();
+            }
+        };
+
+        match toml::from_str(&raw) {
+            Ok(config) => config,
+            Err(_) => Self::default(),
+        }
+    }
+
+    /// Loads the configuration from the default TOML configuration file.
+    ///
+    /// If the configuration could not be loaded by the application, a default instance of the
+    /// `Config` structure will be returned instead.
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    pub fn from_config_file() -> Self {
+        let home_prefix = env::var("ANOTHERMQ_HOME").unwrap_or_else(|_| "".into());
+        let config_path = home_prefix + "/etc/another-mq/another-mq.toml";
+
+        let raw = match fs::read_to_string(config_path) {
+            Ok(raw) => raw,
+            Err(_) => {
+                return Self::default();
+            }
+        };
+
+        match toml::from_str(&raw) {
+            Ok(config) => config,
+            Err(_) => Self::default(),
+        }
+    }
 }
 
 impl Default for Config {
